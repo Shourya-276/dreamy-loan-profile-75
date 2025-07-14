@@ -1,8 +1,10 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ArrowUp, Paperclip, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from "@/contexts/AuthContext";
+import socketService from "@/lib/socket";
 
 interface Message {
   id: string;
@@ -18,77 +20,65 @@ interface ChatWidgetProps {
 }
 
 const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, setIsOpen }) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      text: "Hello, my loan is approved but not credited to my account yet. Can you check?",
-      sender: "user",
-      name: "Rahul Sharma",
-      timestamp: new Date(Date.now() - 1000 * 60 * 25),
-    },
-    {
-      id: "2",
-      text: "Hi Rohan, I'll check with the bank. Can you confirm your loan reference number?",
-      sender: "support",
-      name: "Priya Sharma",
-      timestamp: new Date(Date.now() - 1000 * 60 * 22),
-    },
-    {
-      id: "3",
-      text: "Sure! It's LOAN12345",
-      sender: "user",
-      name: "Rahul Sharma",
-      timestamp: new Date(Date.now() - 1000 * 60 * 20),
-    },
-    {
-      id: "4",
-      text: "Thanks! I've escalated your request to the manager. You'll get an update soon.",
-      sender: "support",
-      name: "Priya Sharma",
-      timestamp: new Date(Date.now() - 1000 * 60 * 15),
-    },
-    {
-      id: "5",
-      text: "We checked with the bank, and the loan will be credited within 24 hours.",
-      sender: "manager",
-      name: "Aman Verma (Manager)",
-      timestamp: new Date(Date.now() - 1000 * 60 * 10),
-    },
-    {
-      id: "6",
-      text: "Your loan will be credited within 24 hours. Let me know if you need anything else!",
-      sender: "support",
-      name: "Priya Sharma",
-      timestamp: new Date(Date.now() - 1000 * 60 * 5),
-    },
-  ]);
+  const { user } = useAuth();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    if (user && user.role === 'customer' && user.salesManagerId) {
+      // Connect to socket for customers
+      const socket = socketService.connect(parseInt(user.id), user.salesManagerId);
+      
+      socket.on('connect', () => {
+        setIsConnected(true);
+      });
+
+      socket.on('disconnect', () => {
+        setIsConnected(false);
+      });
+
+      socket.on('message', (message: any) => {
+        const formattedMessage: Message = {
+          id: message.id.toString(),
+          text: message.text,
+          sender: (message.senderType === 'sales_manager' ? 'support' : message.senderType === 'manager' ? 'manager' : 'user') as "user" | "support" | "manager",
+          name: message.senderName || 'Unknown',
+          timestamp: new Date(message.timestamp)
+        };
+        setMessages(prev => [...prev, formattedMessage]);
+      });
+
+      socket.on('chatHistory', (history: any[]) => {
+        const formattedHistory = history.map((msg: any) => ({
+          id: msg.id.toString(),
+          text: msg.text,
+          sender: (msg.senderType === 'sales_manager' ? 'support' : msg.senderType === 'manager' ? 'manager' : 'user') as "user" | "support" | "manager",
+          name: msg.senderName || 'Unknown',
+          timestamp: new Date(msg.timestamp)
+        }));
+        setMessages(formattedHistory);
+      });
+
+      return () => {
+        socketService.disconnect();
+      };
+    }
+  }, [user]);
 
   const sendMessage = () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !user) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: newMessage,
-      sender: "user",
-      name: "Rahul Sharma",
-      timestamp: new Date(),
-    };
+    if (user.role === 'customer' && user.salesManagerId) {
+      socketService.emit('chatMessage', {
+        senderId: parseInt(user.id),
+        receiverId: user.salesManagerId,
+        text: newMessage,
+        senderType: 'user'
+      });
+    }
 
-    setMessages([...messages, userMessage]);
     setNewMessage("");
-
-    // Simulate support response after 1 second
-    setTimeout(() => {
-      const supportMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "Thank you for your message! Our team will get back to you shortly.",
-        sender: "support",
-        name: "Priya Sharma",
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, supportMessage]);
-    }, 1000);
   };
 
   return (

@@ -1,5 +1,6 @@
 import db from "../../db.js";
 import { validateLogin, validateSignup } from "../../validators/inputValidation.js";
+import chatService from "../Chat/chatService.js";
 
 // Helper function to automatically assign customer to sales manager
 async function autoAssignCustomerToSalesManager(customerId) {
@@ -85,12 +86,27 @@ export async function login(req, res) {
         }
 
         const { email, password } = req.body;
-        const query = "SELECT id, name, email, mobile, role FROM users WHERE email = $1 AND password = $2";
+        const query = `
+            SELECT u.id, u.name, u.email, u.mobile, u.role, l.sales_manager_id
+            FROM users u
+            LEFT JOIN leads l ON l.customer_id = u.id
+            WHERE u.email = $1 AND u.password = $2
+        `;
         const values = [email, password];
         const result = await db.query(query, values);
 
         if (result.rows.length > 0) {
-            return res.status(200).json(result.rows[0]);
+            const user = result.rows[0];
+            return res.status(200).json({
+                message: "Login successful",
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    role: user.role,
+                    ...(user.role === 'customer' && user.sales_manager_id && { salesManagerId: user.sales_manager_id })
+                }
+            });
         }
         return res.status(401).send("Login failed");
     } catch (err) {
@@ -128,6 +144,17 @@ export async function signup(req, res) {
         // If it's a customer, automatically assign to a sales manager
         if (role === 'customer') {
             await autoAssignCustomerToSalesManager(result.rows[0].id);
+            
+            // Initialize chat room for the new customer
+            const salesManagerAssignment = await db.query(
+                'SELECT sales_manager_id FROM leads WHERE customer_id = $1',
+                [result.rows[0].id]
+            );
+            
+            if (salesManagerAssignment.rows.length > 0) {
+                const salesManagerId = salesManagerAssignment.rows[0].sales_manager_id;
+                await chatService.createOrGetChatRoom(result.rows[0].id, salesManagerId);
+            }
         }
 
         return res.status(200).json(result.rows[0]);

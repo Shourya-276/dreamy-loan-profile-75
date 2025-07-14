@@ -12,6 +12,7 @@ interface User {
   mobile?: string;
   isVerified: boolean;
   role: 'customer' | 'salesmanager' | 'loancoordinator' | 'loanadministrator' | 'connector' | 'superadmin';
+  salesManagerId?: number;
 }
 
 interface AuthContextType {
@@ -81,11 +82,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // };
         if(response.status === 200){
           const user: User = {
-            id: response.data.id,
-            name: response.data.name,
-            email: response.data.email,
+            id: response.data.user.id,
+            name: response.data.user.name,
+            email: response.data.user.email,
             isVerified: true,
-            role: response.data.role
+            role: response.data.user.role,
+            ...(response.data.user.salesManagerId && { salesManagerId: response.data.user.salesManagerId })
           };
           setUser(user);
           localStorage.setItem("loanForIndiaUser", JSON.stringify(user));

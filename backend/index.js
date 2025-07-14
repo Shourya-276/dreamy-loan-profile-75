@@ -2,6 +2,9 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import app from "./app.js";
+import { createServer } from "http";
+import { initializeSocket } from "./Chat/socket.js";
+import chatService from "./Chat/chatService.js";
 // Shared routes (customer functionality)
 import authRoutes from "./routes/shared/auth.js";
 import personalDetailsRoutes from "./routes/shared/personalDetails.js";
@@ -29,7 +32,11 @@ import adminBankROIRoutes from "./routes/admin/bankROI.js";
 // Builder routes
 import builderProjectRoutes from "./routes/builder/projects.js";
 
+// Chat routes
+import chatRoutes from "./Chat/chatRoutes.js";
+
 const port = process.env.PORT || 3000;
+const server = createServer(app);
 
 app.get("/", (_req, res) => res.send("Hello World"));
 
@@ -60,6 +67,16 @@ app.use("/admin/bank-roi", adminBankROIRoutes);
 // Builder specific routes
 app.use("/builder/projects", builderProjectRoutes);
 
-app.listen(port, () => {
+// Chat routes
+app.use("/chat", chatRoutes);
+
+// Initialize Socket.IO
+const io = initializeSocket(server);
+
+// Initialize chat tables
+chatService.initializeTables();
+
+server.listen(port, () => {
     console.log(`Server is running on port ${port}`);
+    console.log(`Socket.IO server is ready`);
 });
