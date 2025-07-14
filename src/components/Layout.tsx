@@ -199,12 +199,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {children}
           </main>
           
-          {/* ChatWidget - Always visible for default users and sales managers on dashboard */}
-          {(!isSalesManager || (isSalesManager && (isCurrentRoute("/dashboard") || isCurrentRoute("/")))) && (
-            <div className="w-80 border-l border-gray-200 dark:border-gray-700 h-screen sticky top-0">
-              <ChatWidget isOpen={true} setIsOpen={() => {}} />
-            </div>
-          )}
+          {/* ChatWidget - Always visible for all users */}
+          <div className="w-80 border-l border-gray-200 dark:border-gray-700 h-screen sticky top-0">
+            <ChatWidget isOpen={true} setIsOpen={() => {}} />
+          </div>
         </div>
       </div>
     </div>
